@@ -1,0 +1,1 @@
+nohup macs2 callpeak -t At_H3K27me1_rep2.bam -f BAM --broad -g 1.0e8 --broad-cutoff 0.1 -n At_H3K27me1_rep2 --nomodel --shift 37 --extsize 73
