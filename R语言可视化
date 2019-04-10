@@ -1,0 +1,96 @@
+setwd("C:/Users/woshicong/Desktop/DEseq2/chip-seq/12_10/to_gao/2019_1_8汇报/total_chipseeker_bed/")
+BiocManager::install("TxDb.Athaliana.BioMart.plantsmart28", version = "3.8")
+BiocManager::install("clusterProfiler", version = "3.8")
+BiocManager::install("org.At.tair.db", version = "3.8")
+library(clusterProfiler)
+library(ChIPseeker)
+library(TxDb.Athaliana.BioMart.plantsmart28)
+library(org.At.tair.db)
+
+# ring1B <- readPeakFile("intersect.bed",as="GRanges",header=F)
+temp = list.files(pattern="*.bed")
+newname <- c()
+for(f in temp){  
+  newname <- c(newname,sub('\\_inter.bed','',f))  
+}#关于获取所有组蛋白变量名的循环调用
+myfiles = lapply(temp, readPeakFile)
+peak_anno <- lapply(myfiles,annotatePeak,tssRegion = c(-3000,3000),
+                    TxDb = TxDb.Athaliana.BioMart.plantsmart28,
+                    annoDb="org.At.tair.db",
+                    level = "gene")
+peak_anno1 <- peak_anno
+names(peak_anno1) <- newname
+plotAnnoBar(peak_anno1)
+# stamen_peak_anno <- annotatePeak(ring1B,tssRegion = c(-3000,3000),
+#                                  TxDb = TxDb.Athaliana.BioMart.plantsmart28,
+#                                  annoDb="org.At.tair.db",
+#                                  level="gene")
+covplot(ring1B, weightCol = "V5")
+# stamen_gene <- as.data.frame(peak_anno)
+# stamen_gene
+annobar <- plotAnnoBar(peak_anno1)
+TOtss <- plotDistToTSS(peak_anno1,title="Distribution of histone modification-binding loci relative to TSS")
+multiplot(annobar,TOtss)
+
+
+upsetplot(peak_anno1[[1]], vennpie=FALSE)
+
+for(f in 1:length(peak_anno1)){  #对列表进行数字循环
+  tiff(file = paste(names(peak_anno1)[f],".tiff"))#对多个文件进行批量命名
+  upsetplot(peak_anno1[[f]], vennpie=FALSE) #作图
+  dev.off()#结束作图
+  # save.image(pic,file =names(peak_anno1[f]) )
+}
+
+#注释
+#转ID
+keytypes(org.At.tair.db)
+sepal_gene_test<- select(org.At.tair.db,keys = peak_anno$geneId,
+                         columns = c("SYMBOL","GENENAME"),
+                         keytype = "TAIR")
+
+genes = lapply(peak_anno, function(i) as.data.frame(i)$geneId)
+# vennplot(genes)
+names(genes) = sub("_", "\n", names(genes))
+names(genes) <- newname
+compKEGG <- compareCluster(geneCluster   = genes,
+                           fun           = "enrichKEGG",
+                           pvalueCutoff  = 0.05,
+                           pAdjustMethod = "BH")
+compGO <- compareCluster(geneCluster   = genes,
+                           fun           = "enrichGO",
+                           pvalueCutoff  = 0.05,
+                           pAdjustMethod = "BH",
+                         OrgDb = org.At.tair.db,ont = "MF",
+                         keyType = "TAIR")
+dotplot(compGO, showCategory = 15, title = "GO Enrichment Analysis")
+
+# stamen_mf <- enrichGO(gene = sepal_gene_test$TAIR,
+#                       OrgDb = org.At.tair.db,ont = "MF",
+#                       keyType = "TAIR",pvalueCutoff = 0.05)
+# dotplot(stamen_mf)
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+H_P_L_plot <- ggplot( H_P_D ,aes( x = Type ,y= P_L , colour=Type ))+
+  geom_boxplot()+
+  #geom_violin()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5))+
+  scale_y_continuous(labels = comma)+
+  labs( x = "",y = "")+
+  geom_jitter(shape=16, position=position_jitter(0.2))
+H_P_L_plot
+multiplot(H_P_D_plot,H_P_L_plot)
+# 总体组蛋白百分比饼状图
+A_H_P <- read.table("H_P_P_csv.csv",header = T,sep = ",")
+head(A_H_P)
+fix(A_H_P)
+A_H_P$label <- scales::percent(A_H_P$Per)
+A_H_H_plot <- ggplot( A_H_P, aes( x = Histone, y = Per,fill = Type ))+
+  geom_bar(stat = "identity")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5))+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1))
+A_H_H_plot
+multiplot(A_H_H_plot,H_P_D_plot,H_P_L_plot)
+dotplot(stamen_mf)
